@@ -239,4 +239,5 @@ __marimo__/
 *.pkl
 *.pickle
 uv.lock
-src/ml26/E06_mlp_reg/test_preds.csv
+*.csv
+*.json
