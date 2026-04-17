@@ -7,5 +7,5 @@ Ahora que tienes los conocimientos básicos de aprendizaje máquina y aprendizaj
 Recuerda descargar el dataset siguiendo las instrucciones en [./data/README.md](./data/README.md)
 
 Te recomiendo primero explorar todos los archivos y tratar de comprender la estructura del código, después prosigue a llenar las secciones <b>TODO </b> y a documentar tu tren de pensamiento, así como tus resultados en el blog. 
-Puedes bajar el dataset del s[siguiente enlace](https://drive.google.com/drive/folders/1O0M4gxRajwpjBl685kLQtD_ObQdFG26D?usp=sharing)
+Puedes bajar el dataset del [siguiente enlace](https://drive.google.com/drive/folders/1O0M4gxRajwpjBl685kLQtD_ObQdFG26D?usp=sharing)
 ¡Buena suerte!
