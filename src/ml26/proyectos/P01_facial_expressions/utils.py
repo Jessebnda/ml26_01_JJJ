@@ -10,7 +10,7 @@ import torchvision
 file_path = pathlib.Path(__file__).parent.absolute()
 
 
-def get_transforms(split, img_size):
+def get_transforms(split, img_size=48):
     # El dataset consiste en imagenes en escala de grises
     # con valores entre 0 y 255
     # de dimension 1 x 48 x 48
@@ -18,22 +18,36 @@ def get_transforms(split, img_size):
     # Agrega algún tipo de data agumentation para el conjunto de entrenamiento
     # https://pytorch.org/vision/stable/transforms.html
     common = [
+        torchvision.transforms.Resize((img_size, img_size)),  # ← tamaño correcto para ResNet
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Grayscale(),
-        torchvision.transforms.Resize((img_size, img_size)),
     ]
 
     mean, std = 0.5, 0.5
     if split == "train":
-        transforms = torchvision.transforms.Compose(
-            [
-                *common,
-                torchvision.transforms.ColorJitter(
-                    brightness=0.5, contrast=0.4, saturation=0, hue=0
-                ),
-                torchvision.transforms.Normalize((mean,), (std,)),
-            ]
-        )
+      transforms = torchvision.transforms.Compose(
+          [
+              *common,
+              torchvision.transforms.RandomHorizontalFlip(p=0.5),
+              torchvision.transforms.RandomRotation(15),          
+              torchvision.transforms.RandomAffine(
+                  degrees=0,
+                  translate=(0.1, 0.1),                           
+                  scale=(0.9, 1.1),                               
+              ),
+              torchvision.transforms.ColorJitter(
+                  brightness=0.3,                                  
+                  contrast=0.3,                                    
+                  saturation=0,
+                  hue=0
+              ),
+              torchvision.transforms.RandomErasing(               
+                  p=0.3,
+                  scale=(0.02, 0.1),
+                  ratio=(0.3, 3.0)
+              ),
+              torchvision.transforms.Normalize((mean,), (std,)),
+          ]
+      )
     else:
         transforms = torchvision.transforms.Compose(
             [*common, torchvision.transforms.Normalize((mean,), (std,))]
@@ -107,9 +121,9 @@ def add_img_text(img: np.ndarray, text_label: str):
         - text (str): text to add to image
     """
     font = cv2.FONT_HERSHEY_SIMPLEX
-    fontScale = 1
+    fontScale = 0.5
     fontColor = (255, 0, 0)
-    thickness = 2
+    thickness = 1
 
     # For the text background
     # Finds space required by the text so that we can put a background with that amount of width.
