@@ -10,6 +10,7 @@ Estrategias disponibles
     gen_random_negatives     — N negativos fijos por cliente, muestreo uniforme. Ignora frecuencia de compra por cliente.
     gen_uniform_random       — negativos proporcionales a la actividad del cliente.
     gen_popularity_weighted  — ítems populares tienen más probabilidad de ser negativos para un cliente dado.
+    gen_smart_negatives      — mezcla mismatch de categoría + mismatch de precio.
 
 Ideas para explorar (gen_smart_negatives)
 -----------------------------------------
@@ -153,37 +154,85 @@ def gen_popularity_weighted(df: pd.DataFrame, n_per_positive: int = 1) -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def gen_smart_negatives(df: pd.DataFrame, n_per_positive: int = 1) -> pd.DataFrame:
-    """Placeholder para tu propia estrategia de negativos.
+def gen_smart_negatives(df: pd.DataFrame, n_per_positive: int = 2) -> pd.DataFrame:
+    """Negativos informativos usando mismatch de categoría y precio.
 
-    Aquí puedes implementar cualquier lógica que considere el comportamiento
-    del cliente para seleccionar negativos más informativos. Algunas ideas:
+    Combina dos señales para asignar mayor peso a los candidatos negativos
+    más "difíciles" de aprender:
 
-    - Mismatch de categoría: para cada cliente, calcular sus top-k categorías
-      más compradas y seleccionar ítems de las categorías restantes.
-      (Requiere la columna item_category en df.)
+    1. Mismatch de categoría: ítems de categorías que el cliente NO suele
+       comprar reciben peso 1.5×. Racional: si alguien compra mayormente
+       zapatos, un vestido es un negativo más informativo que otra camiseta
+       (el modelo ya sabe que camisetas se compran; necesita aprender la
+       frontera real de preferencia).
 
-    - Mismatch de precio: calcular el precio mediano histórico del cliente y
-      seleccionar ítems cuyo precio esté fuera de un rango [median*(1-p),
-      median*(1+p)]. (Requiere item_price en df.)
+    2. Mismatch de precio: ítems con precio fuera del rango histórico del
+       cliente reciben un multiplicador proporcional a la desviación relativa.
+       Racional: un cliente de presupuesto bajo probablemente no compraría
+       un ítem 3× más caro que su gasto promedio.
 
-    - Negativos recientes: priorizar ítems lanzados después de la última compra
-      del cliente, que son los más relevantes para el problema cold-start.
-      (Requiere item_release_date y purchase_timestamp en df.)
-
-    - Mix de estrategias: llamar a varias de las funciones anteriores y
-      concatenar sus resultados con distintas proporciones.
+    El peso final es cat_mismatch × price_mismatch, normalizado a distribución
+    de probabilidad. Se muestrea sin reemplazo con n_per_positive × n_compras
+    negativos por cliente (igual que gen_uniform_random).
 
     Parameters
     ----------
     df              : DataFrame de compras positivas con todas las columnas del CSV.
-    n_per_positive  : cuántos negativos generar por cliente.
+    n_per_positive  : cuántos negativos por compra del cliente (default 2).
 
     Returns
     -------
     pd.DataFrame con columnas customer_id, item_id, label (= 0).
     """
-    raise NotImplementedError("Implementa tu propia estrategia aquí.")
+    purchase_counts = df.groupby("customer_id").size()
+    negatives_map = get_negatives(df)
+
+    # Perfil por cliente
+    customer_median_price = df.groupby("customer_id")["item_price"].median()
+    customer_top_cat = df.groupby("customer_id")["item_category"].agg(
+        lambda x: x.mode().iloc[0]
+    )
+
+    # Catálogo de ítems con precio y categoría
+    item_catalog = (
+        df[["item_id", "item_price", "item_category"]]
+        .drop_duplicates("item_id")
+        .set_index("item_id")
+    )
+
+    rows = []
+    for cid, n_purchases in purchase_counts.items():
+        candidates = list(negatives_map.get(cid, set()))
+        if not candidates:
+            continue
+
+        med_price = customer_median_price[cid]
+        top_cat = customer_top_cat[cid]
+        target = min(len(candidates), n_purchases * n_per_positive)
+
+        scores = []
+        for iid in candidates:
+            if iid not in item_catalog.index:
+                scores.append(1.0)
+                continue
+            item = item_catalog.loc[iid]
+
+            # Peso por mismatch de categoría
+            cat_factor = 1.5 if item["item_category"] != top_cat else 1.0
+
+            # Peso por mismatch de precio (desviación relativa al mediano)
+            price_ratio = abs(item["item_price"] - med_price) / (med_price + 1e-9)
+            price_factor = 1.0 + min(price_ratio, 1.0)  # cap en 2×
+
+            scores.append(cat_factor * price_factor)
+
+        scores = np.array(scores, dtype=float)
+        scores /= scores.sum()
+
+        sampled = np.random.choice(candidates, size=target, replace=False, p=scores)
+        rows.extend({"customer_id": cid, "item_id": iid, "label": 0} for iid in sampled)
+
+    return pd.DataFrame(rows)
 
 
 def gen_final_dataset(train_df: pd.DataFrame, negatives: pd.DataFrame) -> pd.DataFrame:

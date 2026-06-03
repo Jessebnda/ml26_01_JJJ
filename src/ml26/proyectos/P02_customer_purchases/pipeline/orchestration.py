@@ -22,7 +22,7 @@ from ml26.proyectos.P02_customer_purchases.pipeline.io import (
 )
 from ml26.proyectos.P02_customer_purchases.pipeline.negatives import (
     gen_final_dataset,
-    gen_random_negatives,
+    gen_smart_negatives,
 )
 from ml26.proyectos.P02_customer_purchases.pipeline.preprocessing import (
     preprocess,
@@ -75,8 +75,12 @@ def read_train_data():
     customer_feat = extract_customer_features(train_df)
 
     # 3. Genera ejemplos negativos.
-    # Revisa el código de negatives.py para seleccionar tu estrategia
-    negatives = gen_random_negatives(train_df, n_per_positive=1)
+    # gen_smart_negatives: mismatch de categoría + precio → negativos más informativos.
+    # Para cambiar de estrategia, reemplaza gen_smart_negatives por:
+    #   gen_random_negatives(train_df, n_per_positive=1)    — baseline uniforme
+    #   gen_uniform_random(train_df, n_per_positive=1)      — proporcional a actividad
+    #   gen_popularity_weighted(train_df, n_per_positive=1) — ítems populares
+    negatives = gen_smart_negatives(train_df, n_per_positive=2)
 
     # 4. Combina positivos y negativos (gen_final_dataset).
     full_df = gen_final_dataset(train_df, negatives)
